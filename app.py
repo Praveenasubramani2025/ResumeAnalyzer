@@ -151,13 +151,22 @@ def download_csv():
         # Prepare data for CSV export
         data = []
         for resume in parsed_resumes:
+            # Create a formatted contact string
+            contact_info = f"Email: {resume.get('email', 'N/A')}, Phone: {resume.get('phone', 'N/A')}"
+            
+            # Create a formatted skills string, sorted alphabetically
+            skills_list = sorted(resume.get('skills', []))
+            skills_str = ', '.join(skills_list)
+            
             row = {
                 'Name': resume.get('name', 'Unknown'),
                 'Email': resume.get('email', ''),
                 'Phone': resume.get('phone', ''),
-                'Skills': ', '.join(resume.get('skills', [])),
+                'Contact Info': contact_info,
                 'Experience (Years)': resume.get('experience_years', 'N/A'),
                 'Seniority Level': resume.get('seniority_level', 'N/A'),
+                'Skills': skills_str,
+                'Skills Count': len(resume.get('skills', [])),
                 'Similarity Score': resume.get('similarity_score', 'N/A'),
                 'Match Category': resume.get('match_category', 'N/A'),
                 'Weighted Score': resume.get('weighted_score', 'N/A'),
@@ -177,11 +186,15 @@ def download_csv():
         bytes_buffer = io.BytesIO(buffer.getvalue().encode('utf-8'))
         bytes_buffer.seek(0)
         
+        # Get timestamp for filename
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
         return send_file(
             bytes_buffer,
             mimetype='text/csv',
             as_attachment=True,
-            download_name='resume_parsing_results.csv'
+            download_name=f'resume_parsing_results_{timestamp}.csv'
         )
     
     except Exception as e:
@@ -201,14 +214,29 @@ def download_json():
     try:
         # Create a bytes buffer
         buffer = io.BytesIO()
-        buffer.write(json.dumps(parsed_resumes, indent=4).encode('utf-8'))
+        
+        # Get timestamp for filename
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Add a metadata field to the JSON
+        export_data = {
+            "metadata": {
+                "export_date": datetime.datetime.now().isoformat(),
+                "resume_count": len(parsed_resumes),
+                "version": "1.0"
+            },
+            "resumes": parsed_resumes
+        }
+        
+        buffer.write(json.dumps(export_data, indent=4).encode('utf-8'))
         buffer.seek(0)
         
         return send_file(
             buffer,
             mimetype='application/json',
             as_attachment=True,
-            download_name='resume_parsing_results.json'
+            download_name=f'resume_parsing_results_{timestamp}.json'
         )
     
     except Exception as e:

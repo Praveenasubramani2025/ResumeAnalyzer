@@ -4,6 +4,15 @@
 .skills-container {
     max-height: 100px;
     overflow-y: auto;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+/* Phone number styling */
+.phone-number {
+    font-family: monospace;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
 }
 
 /* Skills grid in the modal */

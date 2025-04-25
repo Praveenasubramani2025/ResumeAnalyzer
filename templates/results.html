@@ -71,6 +71,7 @@
                                 <th>File Name</th>
                                 <th>Name</th>
                                 <th>Email</th>
+                                <th>Phone</th>
                                 <th>Experience</th>
                                 <th>Skills</th>
                                 <th>Match</th>
@@ -84,6 +85,7 @@
                                 <td>{{ resume.file_name }}</td>
                                 <td>{{ resume.name }}</td>
                                 <td>{{ resume.email }}</td>
+                                <td><span class="phone-number">{{ resume.phone }}</span></td>
                                 <td>
                                     {% if resume.experience_years and resume.experience_years != 'N/A' %}
                                         <div class="d-flex align-items-center">
@@ -177,7 +179,7 @@
             // Initialize DataTable
             $('#resultsTable').DataTable({
                 responsive: true,
-                order: [[5, 'desc']], // Sort by similarity score by default
+                order: [[6, 'desc']], // Sort by match category by default
                 language: {
                     search: "Search resumes:",
                     lengthMenu: "Show _MENU_ resumes per page",
