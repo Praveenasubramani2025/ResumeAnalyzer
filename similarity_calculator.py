@@ -303,7 +303,13 @@ def extract_seniority_level(job_description):
     try:
         job_text = job_description.lower()
         
-        # Check for seniority indicators
+        # SAP-specific seniority terms
+        if re.search(r'\b(sap architect|solution architect|technical architect|lead architect|principal consultant)\b', job_text):
+            return 'senior'
+        elif re.search(r'\b(sap lead|team lead|project lead|senior basis|senior consultant)\b', job_text):
+            return 'lead'
+
+        # General seniority indicators
         if re.search(r'\b(chief|cto|cio|ceo|vp|vice president)\b', job_text):
             return 'executive'
         elif re.search(r'\b(director)\b', job_text):
@@ -319,16 +325,30 @@ def extract_seniority_level(job_description):
         elif re.search(r'\b(entry|graduate|trainee|intern)\b', job_text):
             return 'entry'
         
-        # If no explicit seniority mentioned, estimate based on years of experience
-        exp_years = extract_experience_requirement(job_description)
-        if exp_years >= 8:
-            return 'senior'
-        elif exp_years >= 5:
-            return 'mid'
-        elif exp_years >= 2:
-            return 'junior'
+        # For SAP roles, years of experience have different thresholds
+        if re.search(r'\b(sap|basis|hana|abap|erp|s/4hana|netweaver)\b', job_text):
+            exp_years = extract_experience_requirement(job_description)
+            if exp_years >= 10:
+                return 'senior'
+            elif exp_years >= 7:
+                return 'lead'
+            elif exp_years >= 4:
+                return 'mid'
+            elif exp_years >= 2:
+                return 'junior'
+            else:
+                return 'entry'
         else:
-            return 'entry'
+            # Standard experience-based seniority for other roles
+            exp_years = extract_experience_requirement(job_description)
+            if exp_years >= 8:
+                return 'senior'
+            elif exp_years >= 5:
+                return 'mid'
+            elif exp_years >= 2:
+                return 'junior'
+            else:
+                return 'entry'
     
     except Exception as e:
         logger.error(f"Error extracting seniority level: {str(e)}", exc_info=True)

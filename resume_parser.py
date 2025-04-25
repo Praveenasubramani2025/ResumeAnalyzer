@@ -197,7 +197,20 @@ def extract_skills(text):
         
         # Other Technical Skills
         "Linux", "Unix", "Windows", "macOS", "Networking", "Security", "Blockchain", "Cryptography",
-        "AR/VR", "IoT", "Game Development", "Unity", "Unreal Engine", "Embedded Systems", "Robotics"
+        "AR/VR", "IoT", "Game Development", "Unity", "Unreal Engine", "Embedded Systems", "Robotics",
+        
+        # SAP Skills
+        "SAP", "SAP BASIS", "BASIS", "SAP HANA", "HANA", "SAP ABAP", "ABAP", "SAP ERP", "ERP", 
+        "SAP R/3", "SAP S/4HANA", "S/4HANA", "SAP MM", "MM", "SAP SD", "SD", "SAP PP", "PP", 
+        "SAP FI", "FI", "SAP CO", "CO", "SAP HCM", "HCM", "SAP BW", "BW", "SAP BI", "BI", 
+        "SAP CRM", "CRM", "SAP SRM", "SRM", "SAP SCM", "SCM", "SAP MDM", "MDM", "SAP PLM", "PLM",
+        "SAP Solution Manager", "Solution Manager", "Solman", "SAP Fiori", "Fiori", "SAP UI5", "UI5",
+        "SAP NetWeaver", "NetWeaver", "SAP BODS", "BODS", "SAP PI", "PI", "SAP PO", "PO", 
+        "SAP BPC", "BPC", "SAP GRC", "GRC", "SAP ADS", "ADS", "SAP SLT", "SLT", "SAP FICO", "FICO",
+        "SAPUI5", "SAP GUI", "SAP Portal", "SAP BTP", "BTP", "SAP CAR", "CAR",
+        "SAP Landscape", "SAP Authorizations", "SAP Security", "SAP Administration", "SAP Monitoring",
+        "SAP System Copy", "SAP Migration", "SAP Upgrade", "SAP Patches", "SAP Troubleshooting",
+        "SAP Performance", "SAP Tuning", "SAP Transport", "SAP Backup", "SAP Recovery"
     ]
     
     found_skills = []
@@ -208,6 +221,28 @@ def extract_skills(text):
         pattern = r'\b' + re.escape(skill) + r'\b'
         if re.search(pattern, text, re.IGNORECASE):
             found_skills.append(skill)
+    
+    # Special case handling for SAP BASIS
+    if "BASIS" in found_skills and "SAP" in found_skills and "SAP BASIS" not in found_skills:
+        found_skills.append("SAP BASIS")
+    
+    # If we found very few skills, try to extract from paragraphs
+    if len(found_skills) < 3:
+        # Extract skills from bullet point lists and paragraphs
+        skill_sections = re.findall(r'(?:skills|expertise|proficiency|knowledge|competenc(?:y|ies))[:\s]+(.*?)(?:\n\n|\Z)', 
+                               text.lower(), re.DOTALL)
+        
+        if skill_sections:
+            for section in skill_sections:
+                # Split by common separators and clean up
+                potential_skills = re.split(r'[,;•|\n]', section)
+                for skill_item in potential_skills:
+                    skill_item = skill_item.strip()
+                    if len(skill_item) > 2 and len(skill_item) < 50:  # Reasonable length for a skill
+                        # Try to match with known skills
+                        for skill in common_skills:
+                            if skill.lower() in skill_item and skill not in found_skills:
+                                found_skills.append(skill)
     
     return found_skills
 
@@ -222,12 +257,24 @@ def extract_experience_years(text):
         Integer representing years of experience
     """
     try:
-        # Common patterns for experience in resumes
+        # Common patterns for experience in resumes - expanded with more variants
         patterns = [
-            r'(\d+)\+?\s*(?:years|yrs)(?:\s*of)?\s*(?:total|overall)?\s*experience',
-            r'(?:total|overall)\s*(?:of)?\s*(\d+)\+?\s*(?:years|yrs)',
-            r'(?:worked|working)\s*(?:for)?\s*(\d+)\+?\s*(?:years|yrs)',
-            r'(\d+)\+?\s*(?:years|yrs)\s*(?:in|of experience in)'
+            # General experience patterns
+            r'(\d+)[\+]?\s*(?:years|yrs|year)(?:\s*of)?\s*(?:total|overall|professional|relevant|industry)?\s*experience',
+            r'(?:total|overall|professional)\s*(?:of)?\s*(\d+)[\+]?\s*(?:years|yrs|year)\s*(?:experience|in)?',
+            r'(?:worked|working|experience)\s*(?:for|of)?\s*(\d+)[\+]?\s*(?:years|yrs|year)',
+            r'(\d+)[\+]?\s*(?:years|yrs|year)\s*(?:in|of experience in|experience with)',
+            
+            # IT/SAP specific experience patterns
+            r'(?:sap|it|technical)\s*(?:experience|professional)(?:\s*of)?\s*(\d+)[\+]?\s*(?:years|yrs|year)',
+            r'(\d+)[\+]?\s*(?:years|yrs|year)\s*(?:of)?\s*(?:sap|basis|it|technical)\s*experience',
+            r'experience\s*(?:with|in)\s*(?:sap|basis)(?:\s*for)?\s*(\d+)[\+]?\s*(?:years|yrs|year)',
+            
+            # Experience with "+" mentions
+            r'(\d+)\+\s*(?:years|yrs|year)',
+            
+            # Professional summary with years
+            r'(?:professional with|consultant with|specialist with)\s*(\d+)[\+]?\s*(?:years|yrs|year)',
         ]
         
         experience_text = text.lower()
@@ -240,9 +287,15 @@ def extract_experience_years(text):
             if matches:
                 for match in matches:
                     try:
-                        years = int(match)
-                        all_years.append(years)
-                    except ValueError:
+                        if isinstance(match, tuple):
+                            for submatch in match:
+                                if submatch.isdigit():
+                                    years = int(submatch)
+                                    all_years.append(years)
+                        else:
+                            years = int(match)
+                            all_years.append(years)
+                    except (ValueError, TypeError):
                         pass
         
         # If we found experience years, use the highest number
@@ -254,12 +307,23 @@ def extract_experience_years(text):
         if experience > 0:
             return experience
         
-        # Default to entry-level if no experience found
+        # Check for career-spanning terms that suggest extensive experience
+        if any(term in experience_text for term in 
+               ['senior consultant', 'principal consultant', 'lead consultant', 
+                'senior basis', 'chief', 'head of', 'director']):
+            return 10  # Default to senior level when senior-related terms are found
+        
+        # Default to mid-level if no experience found but technical terms present
+        if any(term in experience_text for term in 
+               ['sap', 'basis', 'hana', 'abap', 'netweaver', 'fiori']):
+            return 5
+            
+        # Default to entry-level if nothing found
         return 1
     
     except Exception as e:
         logger.error(f"Error extracting experience years: {str(e)}", exc_info=True)
-        return 1
+        return 3  # Default to junior level in case of errors
 
 def estimate_experience_from_employment(text):
     """
@@ -274,50 +338,94 @@ def estimate_experience_from_employment(text):
     try:
         # Look for date ranges (e.g., 2018-2022, 2018 - Present, etc.)
         date_patterns = [
-            r'(\d{4})\s*(?:-|to|–|—)\s*(\d{4}|\bpresent\b|\bcurrent\b)',
-            r'(\d{2}/\d{4})\s*(?:-|to|–|—)\s*(\d{2}/\d{4}|\bpresent\b|\bcurrent\b)',
-            r'(\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4})\s*(?:-|to|–|—)\s*(\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}|\bpresent\b|\bcurrent\b)'
+            # YYYY-YYYY or YYYY-Present
+            r'(\d{4})\s*(?:-|to|–|—)\s*(\d{4}|\bpresent\b|\bcurrent\b|\bnow\b)',
+            # MM/YYYY-MM/YYYY
+            r'(\d{1,2}/\d{4})\s*(?:-|to|–|—)\s*(\d{1,2}/\d{4}|\bpresent\b|\bcurrent\b|\bnow\b)',
+            # Month YYYY - Month YYYY
+            r'(\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4})\s*(?:-|to|–|—)\s*(\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|\bpresent\b|\bcurrent\b|\bnow\b)',
+            # For SAP resumes: look for common project duration formats
+            r'(?:project|contract).*?(\d{4})\s*(?:-|to|–|—)\s*(\d{4}|\bpresent\b|\bcurrent\b|\bnow\b)'
         ]
         
+        # Check for indicators of single-company long tenure 
+        experience_text = text.lower()
+        
+        # If we see phrases like "12 years at [company]" or "with [company] since 2010"
+        long_tenure_patterns = [
+            r'(\d+)\s*(?:years|yrs|year)\s*(?:at|with)\s*\w+',
+            r'(?:since|from)\s*(\d{4})\s*(?:at|with|to present)',
+            r'(?:joined)\s*\w+\s*(?:in)\s*(\d{4})'
+        ]
+        
+        for pattern in long_tenure_patterns:
+            matches = re.findall(pattern, experience_text)
+            if matches:
+                for match in matches:
+                    try:
+                        # Direct year count
+                        if len(match) <= 4:  # It's likely a year, not a count
+                            if int(match) > 1900:  # It's definitely a year
+                                years = 2025 - int(match)
+                                if years > 0 and years < 50:
+                                    return years
+                            else:
+                                # It's a count of years
+                                return int(match)
+                    except (ValueError, TypeError):
+                        pass
+                        
+        # Standard date range processing
         total_years = 0
         current_year = 2025  # Using current year
         
         for pattern in date_patterns:
             matches = re.findall(pattern, text.lower())
             for match in matches:
-                start, end = match
-                
-                # Extract start year
-                start_year = None
-                if re.match(r'\d{4}', start):
-                    match = re.search(r'\d{4}', start)
-                    if match:
-                        start_year = int(match.group())
-                elif '/' in start:
-                    start_year = int(start.split('/')[-1])
-                
-                # Extract end year
-                end_year = None
-                if re.match(r'\d{4}', end):
-                    match = re.search(r'\d{4}', end)
-                    if match:
-                        end_year = int(match.group())
-                elif '/' in end:
-                    end_year = int(end.split('/')[-1])
-                elif 'present' in end or 'current' in end:
-                    end_year = current_year
-                
-                # Calculate years for this position if we have both dates
-                if start_year and end_year:
-                    years = end_year - start_year
-                    if years > 0 and years < 50:  # Sanity check
-                        total_years += years
+                if isinstance(match, tuple) and len(match) >= 2:
+                    start, end = match[0], match[1]
+                    
+                    # Extract start year
+                    start_year = None
+                    if re.search(r'\d{4}', start):
+                        year_match = re.search(r'\d{4}', start)
+                        if year_match:
+                            start_year = int(year_match.group())
+                    elif '/' in start and len(start.split('/')) > 1:
+                        try:
+                            start_year = int(start.split('/')[-1])
+                        except (ValueError, IndexError):
+                            pass
+                    
+                    # Extract end year
+                    end_year = None
+                    if re.search(r'\d{4}', end):
+                        year_match = re.search(r'\d{4}', end) 
+                        if year_match:
+                            end_year = int(year_match.group())
+                    elif '/' in end and len(end.split('/')) > 1:
+                        try:
+                            end_year = int(end.split('/')[-1])
+                        except (ValueError, IndexError):
+                            pass
+                    elif any(word in end.lower() for word in ['present', 'current', 'now', 'till date', 'to date']):
+                        end_year = current_year
+                    
+                    # Calculate years for this position if we have both dates
+                    if start_year and end_year and start_year < end_year:
+                        years = end_year - start_year
+                        if years > 0 and years < 50:  # Sanity check
+                            total_years += years
         
-        return total_years if total_years > 0 else 1
+        # If total experience exceeds 30 years, it might be an error - cap it
+        if total_years > 30:
+            return 30
+            
+        return total_years if total_years > 0 else 5  # Default to mid-level experience
     
     except Exception as e:
         logger.error(f"Error estimating experience from employment: {str(e)}", exc_info=True)
-        return 1
+        return 5  # Default to mid-level in case of errors
 
 def determine_seniority_level(text):
     """
