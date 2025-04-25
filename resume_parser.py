@@ -142,20 +142,73 @@ def extract_name(text):
 
 def extract_email(text):
     """Extract email addresses from text."""
-    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-    matches = re.findall(email_pattern, text)
+    # More comprehensive email pattern
+    email_patterns = [
+        # Standard email pattern
+        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+        # Email with "mailto:" prefix
+        r'mailto:([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})',
+        # Email with "Email:" or "E-mail:" prefix
+        r'(?:E-?mail:?\s*)([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})',
+        # Email in brackets or parentheses
+        r'[\[\(]([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})[\]\)]'
+    ]
     
-    return matches[0] if matches else ""
+    for pattern in email_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        if matches:
+            # If we have a capture group, we'll get the email in group 1
+            if isinstance(matches[0], tuple):
+                return matches[0][0]
+            return matches[0]
+    
+    # Try looking for text like "Email: someone at domain dot com"
+    obfuscated_patterns = [
+        r'(?:email|e-mail|contact)(?::|at|\s)+([a-zA-Z0-9._%+-]+)\s+(?:at|@)\s+([a-zA-Z0-9.-]+)\s+(?:dot|\.)\s+([a-zA-Z]{2,})',
+    ]
+    
+    for pattern in obfuscated_patterns:
+        matches = re.findall(pattern, text.lower())
+        if matches and len(matches[0]) >= 3:
+            # Reconstruct email from parts
+            parts = matches[0]
+            return f"{parts[0]}@{parts[1]}.{parts[2]}"
+    
+    return ""
 
 def extract_phone(text):
     """Extract phone numbers from text."""
-    # Define common phone patterns
+    # Define common phone patterns - expanded for more formats
     patterns = [
+        # Standard US/Canada formats
         r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # 123-456-7890
         r'\b\(\d{3}\)[-.\s]?\d{3}[-.\s]?\d{4}\b',  # (123) 456-7890
-        r'\b\+\d{1,2}[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'  # +1 123-456-7890
+        
+        # International formats
+        r'\b\+\d{1,2}[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # +1 123-456-7890
+        r'\b\+\d{1,2}[-.\s]?\(\d{3}\)[-.\s]?\d{3}[-.\s]?\d{4}\b', # +1 (123) 456-7890
+        r'\b\+\d{1,2}[-.\s]?\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b', # +44 20 1234 5678
+        
+        # With prefix like "Tel:" or "Phone:"
+        r'(?:Tel|Phone|Mobile|Cell)[.\s:-]+\s*(\+?\d[\d\s\(\).-]{7,})',
+        r'(?:Tel|Phone|Mobile|Cell)[.\s:-]+\s*(\(\d{3}\)[\s.-]?\d{3}[\s.-]?\d{4})',
+        
+        # Common formats used in SAP/IT resumes
+        r'\b\d{10,11}\b', # 1234567890 or 12345678901
+        r'\b\d{3}-\d{3}-\d{4}\b', # 123-456-7890 
+        r'\b\d{3}\.\d{3}\.\d{4}\b', # 123.456.7890
+        r'\b\d{4}[-.\s]?\d{3}[-.\s]?\d{3}\b' # 1234 567 890 (some international formats)
     ]
     
+    # First try looking for phones with context
+    for pattern in patterns[5:7]:  # The patterns with prefixes
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        if matches:
+            # Clean up the result
+            phone = matches[0].strip()
+            return phone
+    
+    # Then try regular patterns
     for pattern in patterns:
         matches = re.findall(pattern, text)
         if matches:

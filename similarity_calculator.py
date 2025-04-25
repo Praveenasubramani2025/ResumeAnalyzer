@@ -63,7 +63,11 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
             return {
                 'score': 0,
                 'match_category': 'Low',
-                'weighted_score': 0
+                'weighted_score': 0,
+                'skill_match_details': {},
+                'experience_match': 0,
+                'seniority_match': 0,
+                'required_experience': 0
             }
         
         # Preprocess job description
@@ -74,7 +78,8 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
         
         # Count matches and calculate skill relevance
         match_count = 0
-        skill_weight = 0.6  # Skills account for 60% of the score
+        matched_skills = {}
+        skill_weight = 0.5  # Skills account for 50% of the score
         
         for skill in skills:
             skill_tokens = preprocess_text(skill)
@@ -82,12 +87,17 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
             # Check if skill tokens appear in job description
             if all(token in processed_job_desc for token in skill_tokens):
                 match_count += 1
+                matched_skills[skill] = 'full_match'
                 # Give higher weight to skills that are in the top keywords
                 if any(token in job_keywords for token in skill_tokens):
                     match_count += 0.5  # Bonus for matching important keywords
+                    matched_skills[skill] = 'priority_match'
             # Alternative: check if any token appears
             elif any(token in processed_job_desc for token in skill_tokens):
                 match_count += 0.3
+                matched_skills[skill] = 'partial_match'
+            else:
+                matched_skills[skill] = 'no_match'
         
         # Calculate skill similarity percentage
         if len(skills) > 0:
@@ -95,23 +105,58 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
         else:
             skill_similarity = 0
             
-        # Adjust score based on experience and seniority if provided
+        # SAP-specific skill handling
+        has_sap_skills = any(skill.startswith('SAP') for skill in skills)
+        mentioned_in_job = 'sap' in job_description.lower()
+        
+        if has_sap_skills and mentioned_in_job:
+            # Boost SAP skills match for SAP-specific jobs
+            sap_match_bonus = 15
+            skill_similarity = min(100, skill_similarity + sap_match_bonus)
+        
+        # Experience accounts for 30% in general roles, but 35% for SAP roles
+        experience_weight = 0.35 if has_sap_skills and mentioned_in_job else 0.3
+        
+        # Adjust score based on experience if provided
         experience_modifier = 0
-        experience_weight = 0.3  # Experience accounts for 30% of the score
+        req_experience = 0
         if experience_years is not None:
             # Extract experience requirements from job description
             req_experience = extract_experience_requirement(job_description)
             if req_experience:
-                # Calculate how well the experience matches
-                if experience_years >= req_experience:
-                    experience_modifier = 100
+                # SAP jobs often require more years of experience for the same roles
+                if has_sap_skills and mentioned_in_job:
+                    # For SAP roles, we can be a bit more lenient
+                    if experience_years >= req_experience:
+                        experience_modifier = 100
+                    elif experience_years >= (req_experience * 0.8):
+                        # 80% of required experience is still good for SAP roles
+                        experience_modifier = 90
+                    else:
+                        # Partial match based on how close to requirement
+                        experience_modifier = (experience_years / req_experience) * 100
                 else:
-                    # Partial match based on how close to requirement
-                    experience_modifier = (experience_years / req_experience) * 100
+                    # Standard experience evaluation
+                    if experience_years >= req_experience:
+                        experience_modifier = 100
+                    else:
+                        # Partial match based on how close to requirement
+                        experience_modifier = (experience_years / req_experience) * 100
+            else:
+                # No specific experience requirement, so use a standard scale
+                if experience_years >= 10:
+                    experience_modifier = 100  # Senior level
+                elif experience_years >= 5:
+                    experience_modifier = 85   # Mid-level
+                elif experience_years >= 2:
+                    experience_modifier = 70   # Junior level
+                else:
+                    experience_modifier = 50   # Entry level
         
-        # Adjust for seniority
+        # Adjust for seniority - 20% weight for SAP BASIS roles, 15% for other roles
         seniority_modifier = 0
-        seniority_weight = 0.1  # Seniority accounts for 10% of the score
+        seniority_weight = 0.20 if has_sap_skills and mentioned_in_job else 0.15  
+        
         if seniority_level is not None:
             # Extract seniority requirements from job description
             req_seniority = extract_seniority_level(job_description)
@@ -136,8 +181,36 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
                 if candidate_level >= required_level:
                     seniority_modifier = 100
                 else:
-                    # Partial match
-                    seniority_modifier = (candidate_level / required_level) * 100
+                    # Partial match - more lenient for SAP roles where experience matters more
+                    # than formal title
+                    if has_sap_skills and mentioned_in_job:
+                        # For SAP, being one level below required is still quite good
+                        if (required_level - candidate_level) <= 1:
+                            seniority_modifier = 85
+                        else:
+                            seniority_modifier = (candidate_level / required_level) * 100
+                    else:
+                        # Standard seniority evaluation
+                        seniority_modifier = (candidate_level / required_level) * 100
+            else:
+                # If no specific level is required, assume mid-level
+                if candidate_level >= 3:  # Mid or higher
+                    seniority_modifier = 100
+                else:
+                    seniority_modifier = (candidate_level / 3) * 100
+        
+        # Additional context factors - 5% weight
+        context_factors = 0
+        context_weight = 0.05
+        
+        # Check if SAP BASIS admin or similar title is specifically mentioned when this is a SAP BASIS role
+        if has_sap_skills and mentioned_in_job and "SAP BASIS" in skills:
+            # If the job mentions BASIS admin/administrator/consultant specifically
+            if re.search(r'\b(basis\s+adm|basis\s+consultant|basis\s+admin|basis\s+specialist)\b', 
+                         job_description.lower()):
+                context_factors = 100
+            elif "SAP" in job_description and "BASIS" in job_description:
+                context_factors = 80
         
         # Calculate weighted score
         weighted_score = (skill_similarity * skill_weight)
@@ -150,6 +223,10 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
         if seniority_level is not None:
             weighted_score += (seniority_modifier * seniority_weight)
             total_weight += seniority_weight
+        
+        # Add context weight
+        weighted_score += (context_factors * context_weight)
+        total_weight += context_weight
             
         # Normalize weighted score
         if total_weight > 0:
@@ -157,16 +234,21 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
         
         # Determine match category
         match_category = 'Low'
-        if weighted_score >= 80:
+        if weighted_score >= 75:
             match_category = 'High'
         elif weighted_score >= 50:
             match_category = 'Medium'
             
-        # Final result
+        # Final result with detailed breakdown
         result = {
             'score': round(skill_similarity, 1),
             'match_category': match_category,
-            'weighted_score': round(weighted_score, 1)
+            'weighted_score': round(weighted_score, 1),
+            'skill_match_details': matched_skills,
+            'experience_match': round(experience_modifier, 1),
+            'seniority_match': round(seniority_modifier, 1),
+            'context_match': round(context_factors, 1),
+            'required_experience': req_experience
         }
         
         return result
@@ -176,7 +258,11 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
         return {
             'score': 0,
             'match_category': 'Low',
-            'weighted_score': 0
+            'weighted_score': 0,
+            'skill_match_details': {},
+            'experience_match': 0,
+            'seniority_match': 0,
+            'required_experience': 0
         }
 
 def preprocess_text(text):
