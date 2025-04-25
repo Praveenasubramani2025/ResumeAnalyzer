@@ -7,8 +7,10 @@ import json
 from pathlib import Path
 import shutil
 import io
+import uuid
+import werkzeug
 
-from resume_parser import parse_resumes
+from resume_parser import parse_resume_file
 from similarity_calculator import calculate_similarity
 
 # Configure logging
@@ -18,6 +20,11 @@ logger = logging.getLogger(__name__)
 # Initialize the Flask application
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload size
+app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
+
+# Create uploads folder if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 @app.route('/')
 def index():
@@ -26,26 +33,61 @@ def index():
 
 @app.route('/process', methods=['POST'])
 def process():
-    """Process the folder path and job description input."""
+    """Process uploaded resume files and job description input."""
     try:
-        folder_path = request.form.get('folder_path')
-        job_description = request.form.get('job_description')
+        # Get job description
+        job_description = request.form.get('job_description', '')
         
-        # Validate inputs
-        if not folder_path:
-            flash('Please provide a folder path', 'danger')
+        # Check if files are uploaded
+        if 'resume_files' not in request.files:
+            flash('No files uploaded', 'danger')
             return redirect(url_for('index'))
         
-        folder = Path(folder_path)
-        if not folder.exists() or not folder.is_dir():
-            flash(f'Folder path {folder_path} does not exist or is not a directory', 'danger')
+        files = request.files.getlist('resume_files')
+        
+        # Validate files
+        if not files or len(files) == 0 or files[0].filename == '':
+            flash('No files selected', 'danger')
             return redirect(url_for('index'))
         
-        # Parse resumes
-        parsed_resumes = parse_resumes(folder_path)
+        # Create a temporary folder for processing
+        upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], str(uuid.uuid4()))
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        parsed_resumes = []
+        
+        # Save and process each file
+        for file in files:
+            if file and file.filename != '':
+                try:
+                    # Check if file type is allowed
+                    filename = werkzeug.utils.secure_filename(file.filename)
+                    file_path = os.path.join(upload_dir, filename)
+                    
+                    # Save the file
+                    file.save(file_path)
+                    
+                    # Parse the resume file
+                    parsed_data = parse_resume_file(file_path)
+                    
+                    if parsed_data:
+                        parsed_data['file_name'] = filename
+                        parsed_data['file_path'] = file_path
+                        parsed_resumes.append(parsed_data)
+                        logger.info(f"Successfully parsed: {filename}")
+                    
+                except Exception as e:
+                    logger.error(f"Error processing file {file.filename}: {str(e)}", exc_info=True)
+                    # Continue processing other files
+        
+        # Clean up after processing
+        try:
+            shutil.rmtree(upload_dir)
+        except Exception as e:
+            logger.warning(f"Could not remove temporary directory: {str(e)}")
         
         if not parsed_resumes:
-            flash('No valid resume files found in the specified folder', 'warning')
+            flash('No valid resume files were found in the upload', 'warning')
             return redirect(url_for('index'))
         
         # Calculate similarity if job description is provided
@@ -74,7 +116,7 @@ def results():
     job_description = session.get('job_description', '')
     
     if not parsed_resumes:
-        flash('No results to display. Please submit a folder for parsing.', 'warning')
+        flash('No results to display. Please upload resume files for parsing.', 'warning')
         return redirect(url_for('index'))
     
     return render_template('results.html', resumes=parsed_resumes, job_description=job_description)

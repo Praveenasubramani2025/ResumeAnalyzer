@@ -8,6 +8,40 @@ from pathlib import Path
 # Configure logging
 logger = logging.getLogger(__name__)
 
+def parse_resume_file(file_path):
+    """
+    Parse a single resume file
+    
+    Args:
+        file_path: Path to the resume file
+        
+    Returns:
+        Dictionary containing parsed resume data
+    """
+    try:
+        file_path = Path(file_path)
+        logger.info(f"Processing file: {file_path}")
+        
+        # Extract text based on file type
+        if file_path.suffix.lower() == '.pdf':
+            text = extract_text_from_pdf(file_path)
+        elif file_path.suffix.lower() in ['.docx', '.doc']:
+            text = extract_text_from_docx(file_path)
+        elif file_path.suffix.lower() == '.txt':
+            text = extract_text_from_txt(file_path)
+        else:
+            logger.warning(f"Unsupported file type: {file_path}")
+            return None
+        
+        # Parse the text
+        parsed_data = extract_data_from_text(text)
+        
+        return parsed_data
+        
+    except Exception as e:
+        logger.error(f"Error parsing {file_path.name}: {str(e)}", exc_info=True)
+        return None
+
 def parse_resumes(folder_path):
     """
     Parse all resume files in the specified folder
@@ -27,30 +61,11 @@ def parse_resumes(folder_path):
     # Find all resume files in the folder
     for file_path in folder.iterdir():
         if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
-            try:
-                logger.info(f"Processing file: {file_path}")
-                
-                # Extract text based on file type
-                if file_path.suffix.lower() == '.pdf':
-                    text = extract_text_from_pdf(file_path)
-                elif file_path.suffix.lower() in ['.docx', '.doc']:
-                    text = extract_text_from_docx(file_path)
-                elif file_path.suffix.lower() == '.txt':
-                    text = extract_text_from_txt(file_path)
-                else:
-                    logger.warning(f"Unsupported file type: {file_path}")
-                    continue
-                
-                # Parse the text
-                parsed_data = extract_data_from_text(text)
+            parsed_data = parse_resume_file(file_path)
+            if parsed_data:
                 parsed_data['file_name'] = file_path.name
                 parsed_data['file_path'] = str(file_path)
-                
                 results.append(parsed_data)
-                logger.info(f"Successfully parsed: {file_path.name}")
-                
-            except Exception as e:
-                logger.error(f"Error parsing {file_path.name}: {str(e)}", exc_info=True)
     
     return results
 
