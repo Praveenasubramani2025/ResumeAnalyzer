@@ -118,7 +118,9 @@ def extract_data_from_text(text):
         'name': extract_name(text),
         'email': extract_email(text),
         'phone': extract_phone(text),
-        'skills': extract_skills(text)
+        'skills': extract_skills(text),
+        'experience_years': extract_experience_years(text),
+        'seniority_level': determine_seniority_level(text)
     }
     
     return result
@@ -208,3 +210,153 @@ def extract_skills(text):
             found_skills.append(skill)
     
     return found_skills
+
+def extract_experience_years(text):
+    """
+    Extract total years of experience from resume text
+    
+    Args:
+        text: Plain text extracted from resume file
+        
+    Returns:
+        Integer representing years of experience
+    """
+    try:
+        # Common patterns for experience in resumes
+        patterns = [
+            r'(\d+)\+?\s*(?:years|yrs)(?:\s*of)?\s*(?:total|overall)?\s*experience',
+            r'(?:total|overall)\s*(?:of)?\s*(\d+)\+?\s*(?:years|yrs)',
+            r'(?:worked|working)\s*(?:for)?\s*(\d+)\+?\s*(?:years|yrs)',
+            r'(\d+)\+?\s*(?:years|yrs)\s*(?:in|of experience in)'
+        ]
+        
+        experience_text = text.lower()
+        
+        all_years = []
+        
+        # Find all mentions of years of experience
+        for pattern in patterns:
+            matches = re.findall(pattern, experience_text)
+            if matches:
+                for match in matches:
+                    try:
+                        years = int(match)
+                        all_years.append(years)
+                    except ValueError:
+                        pass
+        
+        # If we found experience years, use the highest number
+        if all_years:
+            return max(all_years)
+        
+        # Try to infer from employment history
+        experience = estimate_experience_from_employment(text)
+        if experience > 0:
+            return experience
+        
+        # Default to entry-level if no experience found
+        return 1
+    
+    except Exception as e:
+        logger.error(f"Error extracting experience years: {str(e)}", exc_info=True)
+        return 1
+
+def estimate_experience_from_employment(text):
+    """
+    Estimate years of experience by analyzing employment history
+    
+    Args:
+        text: Resume text
+        
+    Returns:
+        Estimated years of experience
+    """
+    try:
+        # Look for date ranges (e.g., 2018-2022, 2018 - Present, etc.)
+        date_patterns = [
+            r'(\d{4})\s*(?:-|to|–|—)\s*(\d{4}|\bpresent\b|\bcurrent\b)',
+            r'(\d{2}/\d{4})\s*(?:-|to|–|—)\s*(\d{2}/\d{4}|\bpresent\b|\bcurrent\b)',
+            r'(\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4})\s*(?:-|to|–|—)\s*(\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}|\bpresent\b|\bcurrent\b)'
+        ]
+        
+        total_years = 0
+        current_year = 2025  # Using current year
+        
+        for pattern in date_patterns:
+            matches = re.findall(pattern, text.lower())
+            for match in matches:
+                start, end = match
+                
+                # Extract start year
+                start_year = None
+                if re.match(r'\d{4}', start):
+                    start_year = int(re.search(r'\d{4}', start).group())
+                elif '/' in start:
+                    start_year = int(start.split('/')[-1])
+                
+                # Extract end year
+                end_year = None
+                if re.match(r'\d{4}', end):
+                    end_year = int(re.search(r'\d{4}', end).group())
+                elif '/' in end:
+                    end_year = int(end.split('/')[-1])
+                elif 'present' in end or 'current' in end:
+                    end_year = current_year
+                
+                # Calculate years for this position if we have both dates
+                if start_year and end_year:
+                    years = end_year - start_year
+                    if years > 0 and years < 50:  # Sanity check
+                        total_years += years
+        
+        return total_years if total_years > 0 else 1
+    
+    except Exception as e:
+        logger.error(f"Error estimating experience from employment: {str(e)}", exc_info=True)
+        return 1
+
+def determine_seniority_level(text):
+    """
+    Determine the seniority level based on resume text
+    
+    Args:
+        text: Resume text
+        
+    Returns:
+        String indicating seniority level
+    """
+    try:
+        text_lower = text.lower()
+        
+        # Check for explicit seniority mentions in job titles
+        if re.search(r'\b(cto|cio|ceo|chief|vp|vice president)\b', text_lower):
+            return 'executive'
+        elif re.search(r'\b(director)\b', text_lower):
+            return 'director'
+        elif re.search(r'\b(senior|sr|lead|principal)\b', text_lower):
+            return 'senior'
+        elif re.search(r'\b(manager)\b', text_lower):
+            return 'manager'
+        elif re.search(r'\b(mid|intermediate)\b', text_lower):
+            return 'mid'
+        elif re.search(r'\b(junior|jr)\b', text_lower):
+            return 'junior'
+        elif re.search(r'\b(trainee|intern|graduate)\b', text_lower):
+            return 'entry'
+        
+        # Determine by years of experience
+        years = extract_experience_years(text)
+        if years >= 10:
+            return 'senior'
+        elif years >= 7:
+            return 'lead'
+        elif years >= 5:
+            return 'mid'
+        elif years >= 2:
+            return 'junior'
+        else:
+            return 'entry'
+    
+    except Exception as e:
+        logger.error(f"Error determining seniority level: {str(e)}", exc_info=True)
+        return 'mid'  # Default to mid-level

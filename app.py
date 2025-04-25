@@ -93,10 +93,27 @@ def process():
         # Calculate similarity if job description is provided
         if job_description:
             for resume in parsed_resumes:
-                resume['similarity_score'] = calculate_similarity(resume.get('skills', []), job_description)
+                # Get experience and seniority for more accurate scoring
+                experience_years = resume.get('experience_years', None)
+                seniority_level = resume.get('seniority_level', None)
+                
+                # Calculate similarity with additional factors
+                similarity_result = calculate_similarity(
+                    resume.get('skills', []), 
+                    job_description,
+                    experience_years,
+                    seniority_level
+                )
+                
+                # Store the results
+                resume['similarity_score'] = similarity_result.get('score', 0)
+                resume['match_category'] = similarity_result.get('match_category', 'Low')
+                resume['weighted_score'] = similarity_result.get('weighted_score', 0)
         else:
             for resume in parsed_resumes:
                 resume['similarity_score'] = 'N/A'
+                resume['match_category'] = 'N/A'
+                resume['weighted_score'] = 'N/A'
         
         # Store parsed data in session for display
         session['parsed_resumes'] = parsed_resumes
@@ -139,7 +156,11 @@ def download_csv():
                 'Email': resume.get('email', ''),
                 'Phone': resume.get('phone', ''),
                 'Skills': ', '.join(resume.get('skills', [])),
+                'Experience (Years)': resume.get('experience_years', 'N/A'),
+                'Seniority Level': resume.get('seniority_level', 'N/A'),
                 'Similarity Score': resume.get('similarity_score', 'N/A'),
+                'Match Category': resume.get('match_category', 'N/A'),
+                'Weighted Score': resume.get('weighted_score', 'N/A'),
                 'File Name': resume.get('file_name', '')
             }
             data.append(row)
