@@ -290,14 +290,18 @@ def estimate_experience_from_employment(text):
                 # Extract start year
                 start_year = None
                 if re.match(r'\d{4}', start):
-                    start_year = int(re.search(r'\d{4}', start).group())
+                    match = re.search(r'\d{4}', start)
+                    if match:
+                        start_year = int(match.group())
                 elif '/' in start:
                     start_year = int(start.split('/')[-1])
                 
                 # Extract end year
                 end_year = None
                 if re.match(r'\d{4}', end):
-                    end_year = int(re.search(r'\d{4}', end).group())
+                    match = re.search(r'\d{4}', end)
+                    if match:
+                        end_year = int(match.group())
                 elif '/' in end:
                     end_year = int(end.split('/')[-1])
                 elif 'present' in end or 'current' in end:

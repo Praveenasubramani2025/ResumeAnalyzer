@@ -71,9 +71,10 @@
                                 <th>File Name</th>
                                 <th>Name</th>
                                 <th>Email</th>
-                                <th>Phone</th>
+                                <th>Experience</th>
                                 <th>Skills</th>
-                                <th>Similarity Score</th>
+                                <th>Match</th>
+                                <th>Score</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -83,7 +84,16 @@
                                 <td>{{ resume.file_name }}</td>
                                 <td>{{ resume.name }}</td>
                                 <td>{{ resume.email }}</td>
-                                <td>{{ resume.phone }}</td>
+                                <td>
+                                    {% if resume.experience_years and resume.experience_years != 'N/A' %}
+                                        <div class="d-flex align-items-center">
+                                            <span class="badge bg-info me-1">{{ resume.experience_years }} years</span>
+                                            <span class="badge bg-secondary">{{ resume.seniority_level }}</span>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">Not specified</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <div class="skills-container">
                                         {% for skill in resume.skills %}
@@ -92,18 +102,27 @@
                                     </div>
                                 </td>
                                 <td>
-                                    {% if resume.similarity_score != 'N/A' %}
+                                    {% if resume.match_category != 'N/A' %}
+                                        <span class="badge {% if resume.match_category == 'High' %}bg-success{% elif resume.match_category == 'Medium' %}bg-warning{% else %}bg-danger{% endif %} px-3 py-2">
+                                            {{ resume.match_category }}
+                                        </span>
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if resume.weighted_score != 'N/A' %}
                                         <div class="d-flex align-items-center">
                                             <div class="progress flex-grow-1" style="height: 10px;">
-                                                <div class="progress-bar {% if resume.similarity_score > 70 %}bg-success{% elif resume.similarity_score > 40 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                <div class="progress-bar {% if resume.weighted_score > 70 %}bg-success{% elif resume.weighted_score > 40 %}bg-warning{% else %}bg-danger{% endif %}" 
                                                     role="progressbar" 
-                                                    style="width: {{ resume.similarity_score }}%;" 
-                                                    aria-valuenow="{{ resume.similarity_score }}" 
+                                                    style="width: {{ resume.weighted_score }}%;" 
+                                                    aria-valuenow="{{ resume.weighted_score }}" 
                                                     aria-valuemin="0" 
                                                     aria-valuemax="100">
                                                 </div>
                                             </div>
-                                            <span class="ms-2">{{ resume.similarity_score }}%</span>
+                                            <span class="ms-2">{{ resume.weighted_score }}%</span>
                                         </div>
                                     {% else %}
                                         N/A
@@ -207,26 +226,58 @@
                 `;
                 
                 if (resume.similarity_score !== 'N/A') {
+                    // Set color based on match category
                     let scoreClass = 'bg-danger';
-                    if (resume.similarity_score > 70) {
+                    let matchCategory = resume.match_category || 'Low';
+                    if (matchCategory === 'High') {
                         scoreClass = 'bg-success';
-                    } else if (resume.similarity_score > 40) {
+                    } else if (matchCategory === 'Medium') {
                         scoreClass = 'bg-warning';
                     }
                     
                     modalContent += `
-                        <div class="score-container text-center">
-                            <div class="progress" style="height: 30px;">
-                                <div class="progress-bar ${scoreClass}" 
-                                    role="progressbar" 
-                                    style="width: ${resume.similarity_score}%;" 
-                                    aria-valuenow="${resume.similarity_score}" 
-                                    aria-valuemin="0" 
-                                    aria-valuemax="100">
-                                    ${resume.similarity_score}%
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Skills Match</h6>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar ${scoreClass}" 
+                                        role="progressbar" 
+                                        style="width: ${resume.similarity_score}%;" 
+                                        aria-valuenow="${resume.similarity_score}" 
+                                        aria-valuemin="0" 
+                                        aria-valuemax="100">
+                                        ${resume.similarity_score}%
+                                    </div>
                                 </div>
                             </div>
-                            <p class="mt-3">This resume matches ${resume.similarity_score}% of the job description requirements.</p>
+                            <div class="col-md-6">
+                                <h6>Overall Match (Weighted)</h6>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar ${scoreClass}" 
+                                        role="progressbar" 
+                                        style="width: ${resume.weighted_score}%;" 
+                                        aria-valuenow="${resume.weighted_score}" 
+                                        aria-valuemin="0" 
+                                        aria-valuemax="100">
+                                        ${resume.weighted_score}%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Experience & Seniority</h6>
+                            <p>
+                                <span class="badge bg-info me-2">${resume.experience_years || 'Unknown'} years experience</span>
+                                <span class="badge bg-secondary">${resume.seniority_level || 'Unknown'} level</span>
+                            </p>
+                        </div>
+                        
+                        <div class="score-summary text-center mt-4">
+                            <div class="badge bg-${matchCategory === 'High' ? 'success' : (matchCategory === 'Medium' ? 'warning' : 'danger')}" style="font-size: 1.2rem; padding: 10px 20px;">
+                                ${matchCategory} Match
+                            </div>
+                            <p class="mt-3">This candidate is a <strong>${matchCategory.toLowerCase()}</strong> match for the job requirements, with a ${resume.weighted_score}% overall compatibility score.</p>
                         </div>
                     `;
                 } else {

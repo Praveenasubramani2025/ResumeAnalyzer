@@ -97,9 +97,8 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
             
         # Adjust score based on experience and seniority if provided
         experience_modifier = 0
+        experience_weight = 0.3  # Experience accounts for 30% of the score
         if experience_years is not None:
-            experience_weight = 0.3  # Experience accounts for 30% of the score
-            
             # Extract experience requirements from job description
             req_experience = extract_experience_requirement(job_description)
             if req_experience:
@@ -112,9 +111,8 @@ def calculate_similarity(skills, job_description, experience_years=None, seniori
         
         # Adjust for seniority
         seniority_modifier = 0
+        seniority_weight = 0.1  # Seniority accounts for 10% of the score
         if seniority_level is not None:
-            seniority_weight = 0.1  # Seniority accounts for 10% of the score
-            
             # Extract seniority requirements from job description
             req_seniority = extract_seniority_level(job_description)
             
