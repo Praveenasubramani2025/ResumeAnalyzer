@@ -142,78 +142,140 @@ def extract_name(text):
 
 def extract_email(text):
     """Extract email addresses from text."""
+    # Log the first 1000 characters of text for debugging
+    logger.debug(f"Extracting email from text starting with: {text[:1000]}")
+    
     # More comprehensive email pattern
     email_patterns = [
         # Standard email pattern
         r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
         # Email with "mailto:" prefix
         r'mailto:([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})',
-        # Email with "Email:" or "E-mail:" prefix
-        r'(?:E-?mail:?\s*)([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})',
-        # Email in brackets or parentheses
-        r'[\[\(]([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})[\]\)]'
+        # Email with various prefixes like "Email:", "E-mail:", "Mail:", etc.
+        r'(?:E-?mail|Mail|Electronic Mail|Contact|Email Address)(?:[\s:]*|[\s]*at[\s]+)([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})',
+        # Email in brackets, parentheses, or with HTML-like formatting
+        r'[\[\(]([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})[\]\)]',
+        # Email with word boundaries, allowing more relaxed matching
+        r'(?:\s|^|\()([A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})(?:\s|$|\))',
+        # Email following specific labels in resumes
+        r'(?:Contact|Email|E-mail|Mail|Communication)[\s:-]*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})'
     ]
     
+    # First try the more precise patterns
     for pattern in email_patterns:
         matches = re.findall(pattern, text, re.IGNORECASE)
         if matches:
             # If we have a capture group, we'll get the email in group 1
-            if isinstance(matches[0], tuple):
-                return matches[0][0]
-            return matches[0]
+            if isinstance(matches[0], tuple) and matches[0]:
+                email = matches[0][0]
+            else:
+                email = matches[0]
+                
+            # Quick validation of the extracted email
+            if isinstance(email, str) and '@' in email and '.' in email.split('@')[1] and len(email) > 5:
+                logger.debug(f"Found email: {email}")
+                return email
     
     # Try looking for text like "Email: someone at domain dot com"
     obfuscated_patterns = [
-        r'(?:email|e-mail|contact)(?::|at|\s)+([a-zA-Z0-9._%+-]+)\s+(?:at|@)\s+([a-zA-Z0-9.-]+)\s+(?:dot|\.)\s+([a-zA-Z]{2,})',
+        r'(?:email|e-mail|contact|mail)(?::|at|\s)+([a-zA-Z0-9._%+-]+)\s+(?:at|@)\s+([a-zA-Z0-9.-]+)\s+(?:dot|\.)\s+([a-zA-Z]{2,})',
+        r'([a-zA-Z0-9._%+-]+)\s+(?:at|@)\s+([a-zA-Z0-9.-]+)\s+(?:dot|\.)\s+([a-zA-Z]{2,})'
     ]
     
     for pattern in obfuscated_patterns:
         matches = re.findall(pattern, text.lower())
-        if matches and len(matches[0]) >= 3:
-            # Reconstruct email from parts
-            parts = matches[0]
-            return f"{parts[0]}@{parts[1]}.{parts[2]}"
+        if matches:
+            for match in matches:
+                if len(match) >= 3:
+                    # Reconstruct email from parts
+                    email = f"{match[0]}@{match[1]}.{match[2]}"
+                    logger.debug(f"Found obfuscated email: {email}")
+                    return email
     
+    # If we got here, we couldn't find an email
+    logger.warning(f"No email found in text")
     return ""
 
 def extract_phone(text):
     """Extract phone numbers from text."""
+    # Log the first 1000 characters of text for debugging
+    logger.debug(f"Extracting phone from text starting with: {text[:1000]}")
+    
     # Define common phone patterns - expanded for more formats
     patterns = [
+        # With prefix like "Tel:" or "Phone:" or "Contact:" - these have higher priority
+        r'(?:Tel|Telephone|Phone|Mobile|Cell|Contact|Call)(?:[.:\s-]|\sat\s)+\s*(\+?\d[\d\s\(\).-]{7,})',
+        r'(?:Tel|Telephone|Phone|Mobile|Cell|Contact|Call)(?:[.:\s-]|\sat\s)+\s*(\(\d{3}\)[\s.-]?\d{3}[\s.-]?\d{4})',
+        r'(?:Tel|Telephone|Phone|Mobile|Cell|Contact)[.:\s-]+\s*(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})',
+        
+        # International formats with country codes
+        r'\b\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,4}\b',  # +1 123-456-7890 or +44 20 1234 5678
+        r'\b\+\d{1,3}[-.\s]?\(\d{1,4}\)[-.\s]?\d{1,4}[-.\s]?\d{1,4}\b', # +1 (123) 456-7890
+        
         # Standard US/Canada formats
         r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # 123-456-7890
         r'\b\(\d{3}\)[-.\s]?\d{3}[-.\s]?\d{4}\b',  # (123) 456-7890
         
-        # International formats
-        r'\b\+\d{1,2}[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # +1 123-456-7890
-        r'\b\+\d{1,2}[-.\s]?\(\d{3}\)[-.\s]?\d{3}[-.\s]?\d{4}\b', # +1 (123) 456-7890
-        r'\b\+\d{1,2}[-.\s]?\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b', # +44 20 1234 5678
-        
-        # With prefix like "Tel:" or "Phone:"
-        r'(?:Tel|Phone|Mobile|Cell)[.\s:-]+\s*(\+?\d[\d\s\(\).-]{7,})',
-        r'(?:Tel|Phone|Mobile|Cell)[.\s:-]+\s*(\(\d{3}\)[\s.-]?\d{3}[\s.-]?\d{4})',
-        
         # Common formats used in SAP/IT resumes
-        r'\b\d{10,11}\b', # 1234567890 or 12345678901
-        r'\b\d{3}-\d{3}-\d{4}\b', # 123-456-7890 
-        r'\b\d{3}\.\d{3}\.\d{4}\b', # 123.456.7890
-        r'\b\d{4}[-.\s]?\d{3}[-.\s]?\d{3}\b' # 1234 567 890 (some international formats)
+        r'\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b', # 123-456-7890 with explicit separator
+        r'\b\d{3}[.]\d{3}[.]\d{4}\b', # 123.456.7890 with dots
+        r'\b\d{4}[-.\s]\d{3}[-.\s]\d{3}\b', # 1234 567 890 (some international formats)
+        
+        # Last resort - any 10-digit number that could be a phone number
+        r'(?<![0-9])\d{10}(?![0-9])', # 1234567890 (not preceded or followed by a digit)
     ]
     
-    # First try looking for phones with context
-    for pattern in patterns[5:7]:  # The patterns with prefixes
+    # First try looking for phones with context - these are most reliable
+    for pattern in patterns[:3]:  # The patterns with prefixes
         matches = re.findall(pattern, text, re.IGNORECASE)
         if matches:
-            # Clean up the result
-            phone = matches[0].strip()
-            return phone
+            for match in matches:
+                # Clean up the result
+                phone = match.strip()
+                # Validate that this looks like a phone number
+                if re.search(r'\d{3}.*\d{3}.*\d{4}', phone):
+                    logger.debug(f"Found phone with context: {phone}")
+                    return phone
     
-    # Then try regular patterns
+    # Then try all patterns
     for pattern in patterns:
-        matches = re.findall(pattern, text)
+        matches = re.findall(pattern, text, re.IGNORECASE)
         if matches:
-            return matches[0]
+            for match in matches:
+                # Clean up the result - if it's a tuple, take the first element
+                if isinstance(match, tuple):
+                    phone = match[0].strip()
+                else:
+                    phone = match.strip()
+                    
+                # Basic validation - must contain at least 10 digits
+                digit_count = sum(c.isdigit() for c in phone)
+                if digit_count >= 10:
+                    logger.debug(f"Found phone number: {phone}")
+                    return phone
     
+    # Look for numbers near phone-related terms
+    phone_terms = ["phone", "mobile", "cell", "tel", "contact", "call me", "reach me"]
+    for term in phone_terms:
+        # Find the term and look for numbers nearby
+        term_match = re.search(f"\\b{term}\\b", text.lower())
+        if term_match:
+            # Look for numbers within 50 characters of the term
+            start_pos = max(0, term_match.start() - 20)
+            end_pos = min(len(text), term_match.end() + 30)
+            nearby_text = text[start_pos:end_pos]
+            
+            # Try to find numbers in this segment
+            number_matches = re.findall(r'\b\d[\d\s\(\).-]{7,15}\b', nearby_text)
+            for num in number_matches:
+                # Basic validation - must contain at least 10 digits
+                digit_count = sum(c.isdigit() for c in num)
+                if digit_count >= 10:
+                    logger.debug(f"Found phone number near '{term}': {num}")
+                    return num
+    
+    # If we got here, we couldn't find a phone number
+    logger.warning(f"No phone number found in text")
     return ""
 
 def extract_skills(text):
