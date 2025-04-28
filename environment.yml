@@ -1,0 +1,13 @@
+name: resume-analyzer-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pandas
+  - numpy
+  - streamlit
+  - scikit-learn
+  - pip
+  - pip:
+      - some-pypi-package
