@@ -10,4 +10,5 @@ dependencies:
   - scikit-learn
   - pip
   - pip:
-      - some-pypi-package
+      - PyPDF2
+      - python-docx
