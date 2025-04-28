@@ -9,7 +9,6 @@ import shutil
 import io
 import uuid
 import werkzeug
-
 from resume_parser import parse_resume_file
 from similarity_calculator import calculate_similarity
 
